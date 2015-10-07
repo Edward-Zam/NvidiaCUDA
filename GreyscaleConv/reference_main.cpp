@@ -1,5 +1,5 @@
-# This main file is for your reference only. Any modifications or changes
-# to this code will not affect or alter your program's execution.
+// This main file is for your reference only. Any modifications or changes
+// to this code will not affect or alter your program's execution.
 
 #include <iostream>
 #include "timer.h"
