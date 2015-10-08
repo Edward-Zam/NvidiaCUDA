@@ -83,6 +83,68 @@
 #include "reference_calc.cpp"
 #include "utils.h"
 
+__global__
+void getMax(const float* const d_logLuminance, float* const d_bout, const size_t numels )
+{
+	extern __shared__ float sdata[];
+	int id	= blockDim.x * blockIdx.x * threadIdx.x;
+	int tid	= threadIdx.x; 
+	sdata[tid] = d_logLuminance[id];
+	__syncthreads();
+	
+	for ( int  i = 0; i <= numels - 1; i++)
+	{
+		id = threadId.x;
+		stride = 1;
+		offset = 2;
+		if((threadIdx.x + 1)%offset == 0)
+		{
+			sdata[id]	= sdata[tid] > sdata[tid-stride] ? sdata[tid]:sdata[tid-stride];
+			//sdata[tid] = max(sdata[tid], sdata[tid-stride];
+		}
+		
+		__syncthreads();
+		stride = stride*2;
+		offset = offset^2;
+	}
+	
+	if (tid == numels)
+	{
+		d_bout[blockIdx.x] = sdata[numels];
+	}
+}
+
+__global__
+void getMin(const float* const d_logLuminance, float* const d_bout, const size_t numels )
+{
+	extern __shared__ float sdata[];
+	int id	= blockDim.x * blockIdx.x * threadIdx.x;
+	int tid	= threadIdx.x; 
+	sdata[tid] = d_logLuminance[id];
+	__syncthreads();
+	
+	for ( int  i = 0; i <= numels - 1; i++)
+	{
+		id = threadId.x;
+		stride = 1;
+		offset = 2;
+		if((threadIdx.x + 1)%offset == 0)
+		{
+			sdata[id]	= sdata[tid] > sdata[tid-stride] ? sdata[tid-stride]:sdata[tid];
+			//sdata[tid] = min(sdata[tid], sdata[tid-stride];
+		}
+		
+		__syncthreads();
+		stride = stride*2;
+		offset = offset^2;
+	}
+	
+	if (tid == numels)
+	{
+		d_bout[blockIdx.x] = sdata[numels];
+	}
+}
+
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
                                   unsigned int* const d_cdf,
                                   float &min_logLum,
@@ -101,4 +163,5 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
     4) Perform an exclusive scan (prefix sum) on the histogram to get
        the cumulative distribution of luminance values (this should go in the
        incoming d_cdf pointer which already has been allocated for you)       */
+    const size_t numels = numCols * numRows;
 }
