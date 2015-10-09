@@ -145,6 +145,40 @@ void getMin(const float* const d_logLuminance, float* const d_bout, const size_t
 	}
 }
 
+__global__
+void getHist(int *d_bins, const int *d_in, const float minLum, const float lumRange, const int BIN_COUNT)
+{
+	// accumulate using atomics to avoid race conditions
+	int myId	= threadIdx.x + blockDim.x * blockIdx.x;
+	int myItem	= d_in[myId];
+	int myBin	= (myItem - minLum) / lumRange * BIN_COUNT;
+	atomicAdd(&(d_bins[myBin]),1);
+}
+
+__global__
+void HillisSteeleScan()
+{
+	// Copy bins to local memory
+	extern __shared__ unsigned int t_in[];
+	
+	int id	= blockIdx.x * blockDim.x + threadIdx.x;
+	int tid	= threadIdx.x;
+	
+	t_in[tid] = d_in[id];
+	__syncthreads();
+	
+	for(unsigned int j = 1; j < BIN_COUNT; j<<1)
+	{
+		if(tid+j<blockDim.x)
+		{
+			atomicAdd(t_in[tid+j], t_in[tid]);
+			__syncthreads();
+		}
+		d_out[id] = tid>0?t_in[tid-1]:0;
+	}
+	
+}
+
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
                                   unsigned int* const d_cdf,
                                   float &min_logLum,
@@ -163,5 +197,65 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
     4) Perform an exclusive scan (prefix sum) on the histogram to get
        the cumulative distribution of luminance values (this should go in the
        incoming d_cdf pointer which already has been allocated for you)       */
-    const size_t numels = numCols * numRows;
+	   
+	float *d_temp;
+	float *d_luminanceOut;
+	float lumRange;
+	
+	unsigned int *d_bins;
+	
+	// Calculate number of elements in the array;
+	const size_t numels = numCols * numRows;
+	// Instatiate threads to max allowed per block for this GPU
+	int threads = 1024;
+	// Calculate number of blocks
+	int blocks = numels/threads;
+
+	// Allocate device memory
+	checkCudaErrors(cudaMalloc(&d_temp, sizeof(float)*blocks))
+	checkCudaErrors(cudaMalloc(&d_logLuminance, sizeof(float)*1));
+	// Set memory to zero
+	//checkCudaErrors(cudaMemset())
+	
+	// Find the minimum value in the input logLuminance channel
+	getMin<<<blocks, threads, threads * sizeof(float)>>>(d_logLuminance, d_temp, numels);
+	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+	threads = blocks;
+	blocks = 1;
+	getMin<<<blocks, threads,threads * sizeof(float)>>>(d_temp,d_luminanceOut,threads);
+	cudaDeviceSynchronize();checkCudaErrors(cudaGetLastError());
+	// Copy minimum luminance value to min_logLum in host memory
+	checkCudaErrors(cudaMemcpy(&min_logLum, d_luminanceOut, sizeof(float), cudaMemcpyDeviceToHost));
+	
+	// Reset thread and block values
+	threads = 1024;
+	blocks = numels/threads;
+	// Find the maximum value in the input logLuminance channel
+	getMax<<<blocks, threads, threads * sizeof(float)>>>(d_logLuminance, d_temp, numels);
+	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+	threads = blocks;
+	blocks = 1;
+	getMax<<<blocks, threads, threads * sizeof(float)>>>(d_temp, d_luminanceOut, threads);
+	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+	// Copy maximum luminance value to max_logLum in host memory
+	checkCudaErrors(cudaMemcpy(&max_logLum, d_luminanceOut, sizeof(float), cudaMemcpyDeviceToHost));
+	
+	// Calculate the luminance range
+	lumRange = max_logLum - min_logLum;
+	
+	// Genereate a histogram of all values in the logLuminance channel
+	threads = 1024;
+	blocks = numels/threads;
+	getHist<<<blocks, threads>>>(d_bins, d_logLuminance, min_logLum, lumRange, numBins);
+	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+	
+	// Scan algorithm 
+	// We are to perform an exclusive scan on the histogram; the histogram has numBins elements 
+	// and therefore can be launched as one block with numBins threads. 
+	threads = numBins;
+	blocks = 1;
+	
+	
+	
+	
 }
