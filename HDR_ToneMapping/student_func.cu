@@ -84,98 +84,99 @@
 #include "utils.h"
 
 __global__
-void getMax(const float* const d_logLuminance, float* const d_bout, const size_t numels )
+void getMax(float* const d_out, const float* const d_logLuminance )
 {
+	// sdata is allocated in the kernel call: 3rd argument to <<b,t,shmem>>
 	extern __shared__ float sdata[];
-	int id	= blockDim.x * blockIdx.x * threadIdx.x;
-	int tid	= threadIdx.x; 
-	sdata[tid] = d_logLuminance[id];
+	
+	int myId = threadIdx.x + blockDim.x * blockIdx.x;
+	int tid  = threadIdx.x;
+	
+	// load shared mem from global memory
+	sdata[tid] = d_logLuminance[myId];
+	// make sure the entire block is loaded
 	__syncthreads();
-	
-	for ( int  i = 0; i <= numels - 1; i++)
+	// do reduction in shared mem
+	for(unsigned int s = blockDim.x /2; s > 0; s >>= 1)
 	{
-		id = threadId.x;
-		stride = 1;
-		offset = 2;
-		if((threadIdx.x + 1)%offset == 0)
+		if(tid < s)
 		{
-			sdata[id]	= sdata[tid] > sdata[tid-stride] ? sdata[tid]:sdata[tid-stride];
-			//sdata[tid] = max(sdata[tid], sdata[tid-stride];
+			sdata[tid] = sdata[tid] > sdata[tid+s] ? sdata[tid]:sdata[tid+s];
 		}
-		
 		__syncthreads();
-		stride = stride*2;
-		offset = offset^2;
 	}
-	
-	if (tid == numels)
+	// only thread 0 writes result for this block back to global memory
+	if (tid == 0)
 	{
-		d_bout[blockIdx.x] = sdata[numels];
+		d_out[blockIdx.x] = sdata[0];
 	}
 }
 
 __global__
-void getMin(const float* const d_logLuminance, float* const d_bout, const size_t numels )
+void getMin(float* const d_out, const float* const d_logLuminance)
 {
+	// sdata is allocated in the kernel call: 3rd argument to <<b,t,shmem>>
 	extern __shared__ float sdata[];
-	int id	= blockDim.x * blockIdx.x * threadIdx.x;
-	int tid	= threadIdx.x; 
-	sdata[tid] = d_logLuminance[id];
+	
+	int myId = threadIdx.x + blockDim.x * blockIdx.x;
+	int tid  = threadIdx.x;
+	
+	// load shared mem from global memory
+	sdata[tid] = d_logLuminance[myId];
+	// make sure the entire block is loaded
 	__syncthreads();
-	
-	for ( int  i = 0; i <= numels - 1; i++)
+	// do reduction in shared mem
+	for(unsigned int s = blockDim.x /2; s > 0; s >>= 1)
 	{
-		id = threadId.x;
-		stride = 1;
-		offset = 2;
-		if((threadIdx.x + 1)%offset == 0)
+		if(tid < s)
 		{
-			sdata[id]	= sdata[tid] > sdata[tid-stride] ? sdata[tid-stride]:sdata[tid];
-			//sdata[tid] = min(sdata[tid], sdata[tid-stride];
+			sdata[tid] = sdata[tid] > sdata[tid+s] ? sdata[tid+s]:sdata[tid];
 		}
-		
 		__syncthreads();
-		stride = stride*2;
-		offset = offset^2;
+	}
+	// only thread 0 writes result for this block back to global memory
+	if (tid == 0)
+	{
+		d_out[blockIdx.x] = sdata[0];
 	}
 	
-	if (tid == numels)
-	{
-		d_bout[blockIdx.x] = sdata[numels];
-	}
 }
 
+
 __global__
-void getHist(int *d_bins, const int *d_in, const float minLum, const float lumRange, const int BIN_COUNT)
+void getHist(unsigned int* const d_bins, const float* const d_in, const float minLum, const float lumRange, const size_t BIN_COUNT)
 {
 	// accumulate using atomics to avoid race conditions
-	int myId	= threadIdx.x + blockDim.x * blockIdx.x;
-	int myItem	= d_in[myId];
+	int myId = blockIdx.x*blockDim.x+threadIdx.x;
+	float myItem	= d_in[myId];
 	int myBin	= (myItem - minLum) / lumRange * BIN_COUNT;
+	if (myBin >= BIN_COUNT)
+		myBin = BIN_COUNT -1;
 	atomicAdd(&(d_bins[myBin]),1);
+	
+
+	
 }
 
 __global__
-void HillisSteeleScan()
+void hillisSteeleScan(const unsigned int* const d_in, unsigned int* const d_out, const size_t numBins )
 {
 	// Copy bins to local memory
-	extern __shared__ unsigned int t_in[];
+	extern __shared__ unsigned int l_mod[];
 	
 	int id	= blockIdx.x * blockDim.x + threadIdx.x;
 	int tid	= threadIdx.x;
 	
-	t_in[tid] = d_in[id];
+	l_mod[tid] = d_in[id];
 	__syncthreads();
 	
-	for(unsigned int j = 1; j < BIN_COUNT; j<<1)
+	for(unsigned int s = 1; s < numBins; s<<=1)
 	{
-		if(tid+j<blockDim.x)
-		{
-			atomicAdd(t_in[tid+j], t_in[tid]);
-			__syncthreads();
-		}
-		d_out[id] = tid>0?t_in[tid-1]:0;
+		if(tid+s<blockDim.x)
+			l_mod[tid+s]+=l_mod[tid];
+		__syncthreads();
 	}
+	d_out[id] = tid>0?l_mod[tid-1]:0;
 	
 }
 
@@ -198,64 +199,69 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
        the cumulative distribution of luminance values (this should go in the
        incoming d_cdf pointer which already has been allocated for you)       */
 	   
-	float *d_temp;
-	float *d_luminanceOut;
+	float *d_inter;
+	float *d_out;
 	float lumRange;
-	
-	unsigned int *d_bins;
+	unsigned int *d_histo;
 	
 	// Calculate number of elements in the array;
 	const size_t numels = numCols * numRows;
 	// Instatiate threads to max allowed per block for this GPU
 	int threads = 1024;
 	// Calculate number of blocks
-	int blocks = numels/threads;
-
+	int blocks = numCols * numRows/1024;
+		
 	// Allocate device memory
-	checkCudaErrors(cudaMalloc(&d_temp, sizeof(float)*blocks))
-	checkCudaErrors(cudaMalloc(&d_logLuminance, sizeof(float)*1));
+	checkCudaErrors(cudaMalloc(&d_inter, sizeof(float)*blocks));
+	checkCudaErrors(cudaMalloc(&d_out, sizeof(float)*1));
+	checkCudaErrors(cudaMalloc(&d_histo, sizeof(int)*numBins));
+	
 	// Set memory to zero
-	//checkCudaErrors(cudaMemset())
+	checkCudaErrors(cudaMemset(d_histo,0,sizeof(int)*numBins));
+	checkCudaErrors(cudaMemset(d_cdf,0,sizeof(int)*numBins));
 	
 	// Find the minimum value in the input logLuminance channel
-	getMin<<<blocks, threads, threads * sizeof(float)>>>(d_logLuminance, d_temp, numels);
+	getMax<<<blocks, threads, threads * sizeof(float)>>>(d_inter, d_logLuminance);
 	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 	threads = blocks;
 	blocks = 1;
-	getMin<<<blocks, threads,threads * sizeof(float)>>>(d_temp,d_luminanceOut,threads);
+	getMax<<<blocks, threads,threads * sizeof(float)>>>(d_out, d_inter);
 	cudaDeviceSynchronize();checkCudaErrors(cudaGetLastError());
 	// Copy minimum luminance value to min_logLum in host memory
-	checkCudaErrors(cudaMemcpy(&min_logLum, d_luminanceOut, sizeof(float), cudaMemcpyDeviceToHost));
+	checkCudaErrors(cudaMemcpy(&max_logLum, d_out, sizeof(float), cudaMemcpyDeviceToHost));
 	
 	// Reset thread and block values
 	threads = 1024;
-	blocks = numels/threads;
+	blocks = numCols * numRows/1024;
 	// Find the maximum value in the input logLuminance channel
-	getMax<<<blocks, threads, threads * sizeof(float)>>>(d_logLuminance, d_temp, numels);
+	getMin<<<blocks, threads, threads * sizeof(float)>>>(d_inter, d_logLuminance);
 	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 	threads = blocks;
 	blocks = 1;
-	getMax<<<blocks, threads, threads * sizeof(float)>>>(d_temp, d_luminanceOut, threads);
+	getMin<<<blocks, threads, threads * sizeof(float)>>>(d_out, d_inter);
 	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 	// Copy maximum luminance value to max_logLum in host memory
-	checkCudaErrors(cudaMemcpy(&max_logLum, d_luminanceOut, sizeof(float), cudaMemcpyDeviceToHost));
+	checkCudaErrors(cudaMemcpy(&min_logLum, d_out, sizeof(float), cudaMemcpyDeviceToHost));
 	
 	// Calculate the luminance range
 	lumRange = max_logLum - min_logLum;
 	
 	// Genereate a histogram of all values in the logLuminance channel
 	threads = 1024;
-	blocks = numels/threads;
-	getHist<<<blocks, threads>>>(d_bins, d_logLuminance, min_logLum, lumRange, numBins);
+	blocks = numRows*numCols/1024;
+	getHist<<<blocks, threads>>>(d_histo,d_logLuminance,min_logLum,lumRange,numBins);
 	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 	
 	// Scan algorithm 
 	// We are to perform an exclusive scan on the histogram; the histogram has numBins elements 
 	// and therefore can be launched as one block with numBins threads. 
-	threads = numBins;
-	blocks = 1;
+	blocks = 1;	
+	threads = numBins/blocks;
+	hillisSteeleScan<<<blocks, threads, threads*sizeof(unsigned int)>>>(d_histo, d_cdf, numBins);
+	cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 	
-	
-	
-	
+	// Free any memory that we allocated
+	checkCudaErrors(cudaFree(d_histo));
+	checkCudaErrors(cudaFree(d_out));
+	checkCudaErrors(cudaFree(d_inter));
 }
