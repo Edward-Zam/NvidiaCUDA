@@ -42,6 +42,17 @@
 
  */
 
+__global__
+void getHist(unsigned int* const d_bins, const float* const d_in, const float minLum, const float lumRange, const size_t BIN_COUNT)
+{
+	// accumulate using atomics to avoid race conditions
+	int myId = blockIdx.x*blockDim.x+threadIdx.x;
+	float myItem	= d_in[myId];
+	int myBin	= (myItem - minLum) / lumRange * BIN_COUNT;
+	if (myBin >= BIN_COUNT)
+		myBin = BIN_COUNT -1;
+	atomicAdd(&(d_bins[myBin]),1);	
+}
 
 void your_sort(unsigned int* const d_inputVals,
                unsigned int* const d_inputPos,
