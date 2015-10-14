@@ -152,10 +152,7 @@ void getHist(unsigned int* const d_bins, const float* const d_in, const float mi
 	int myBin	= (myItem - minLum) / lumRange * BIN_COUNT;
 	if (myBin >= BIN_COUNT)
 		myBin = BIN_COUNT -1;
-	atomicAdd(&(d_bins[myBin]),1);
-	
-
-	
+	atomicAdd(&(d_bins[myBin]),1);	
 }
 
 __global__
