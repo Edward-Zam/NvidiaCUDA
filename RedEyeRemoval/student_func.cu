@@ -42,16 +42,16 @@
 
  */
 
+
 __global__
-void getHist(unsigned int* const d_bins, const float* const d_in, const float minLum, const float lumRange, const size_t BIN_COUNT)
+void getHist(unsigned int* const d_inputVals, unsigned int* d_histo)
 {
-	// accumulate using atomics to avoid race conditions
-	int myId = blockIdx.x*blockDim.x+threadIdx.x;
-	float myItem	= d_in[myId];
-	int myBin	= (myItem - minLum) / lumRange * BIN_COUNT;
-	if (myBin >= BIN_COUNT)
-		myBin = BIN_COUNT -1;
-	atomicAdd(&(d_bins[myBin]),1);	
+	int myiD = blockIdx.x * blockDim.x + threadId.x;
+	unsigned int myItem = d_inputVals[myItem];
+	// The input value will be pre-shifted so we will always check lsb
+	int myBin = myItem & 1;
+	atomicAdd(&(d_histo[myBin],1);
+	
 }
 
 void your_sort(unsigned int* const d_inputVals,
@@ -60,6 +60,25 @@ void your_sort(unsigned int* const d_inputVals,
                unsigned int* const d_outputPos,
                const size_t numElems)
 {
+
+	// ********* Step 1: Create Histogram ********** //
+	
+	// numBits represents the number of bits we will be scanning
+	const int numBits = 1;
+	// The number of Bins is equal to 1 * 2^(numBits)
+	const int numBins = 1 << numBits;
+	unsigned int* d_histo;
+
+	// Allocate histogram memory on device and set to zero
+	checkCudaErrors(cudaMalloc(d_histo, sizeof(int)*numBins));
+	checkCudaErrors(cudaMemset(d_histo,0, sizeof(int)*numBins));
+
+	int threads = 1024;
+	int blocks  = numElems / threads;
+		
+	
+
+	// **************** End Step 1 ***************** //
  
 }
 
