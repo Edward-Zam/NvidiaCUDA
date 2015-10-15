@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include "gputimer.h"
 
-const int N = 1024;
+const int N = 1024;	// matrix is N*N
+const int K = 32;	// each block will be 32 * 32 blocks
 
 void transpose_CPU(float in [], float out[])
 {
@@ -25,6 +26,15 @@ transpose_parallel_per_row(float in[], float out[])
 	
 	for(int j=0; j<N;j++)
 		out[i + i*N] = in[i + j*N];
+}
+
+__global__ void
+transpose_parallel_per_element(float in[], float out[])
+{
+	int i	= blockIdx.x * blockDim.x + threadIdx.x;
+	int j	= blockIdx.y * blockDim.y + threadIdx.y;
+	
+	out[j + i*N] = in[i + j*N];
 }
 
 int main(int argc, char **argv)
@@ -62,6 +72,16 @@ int main(int argc, char **argv)
 	printf("transpose_parallel_per_row: %g ms. \nVerifying transpose...%s\n,", 
 		timer.Elapsed(),
 		compare_matrices(out,gold) ? "Failed": "Success"); 
+		
+	dim3 blocks(N/K, N/K);
+	dim3 threads(K,K);
+	timer.Start();
+	transpose_parallel_per_element<<<blocks, threads>>>(d_in, d_out);
+	timer.Stop();
+	cudaMemcpy(out, d_out, numbytes, cudaMemcpyDeviceToHost);
+	printf("transpose_parallel_per_element: %g ms. \nVerifying tranpose...%s\n,",
+		timer.Elapse(),
+		compare_matrices(out,gold) ? "Failed": "Success");
 	
 //	printf("input matrix:\n"); print_matrix(in);
 //	printf("reference or 'gold' transposed matrix:\n"); print_matrix(gold);
