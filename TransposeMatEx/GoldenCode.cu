@@ -11,7 +11,7 @@ void transpose_CPU(float in [], float out[])
 			out[j + i*N] = in[i + j*N]; //out(j,i) = in(i,j)
 }
 
-__global void 
+__global__ void 
 transpose_serial(float in [], float out[])
 {
 	for(int j=0;j<N;j++)
@@ -77,10 +77,11 @@ int main(int argc, char **argv)
 	dim3 threads(K,K);
 	timer.Start();
 	transpose_parallel_per_element<<<blocks, threads>>>(d_in, d_out);
+	// transpose_parallel_per_element: 0.341504 ms for N=1024
 	timer.Stop();
 	cudaMemcpy(out, d_out, numbytes, cudaMemcpyDeviceToHost);
 	printf("transpose_parallel_per_element: %g ms. \nVerifying tranpose...%s\n,",
-		timer.Elapse(),
+		timer.Elapsed(),
 		compare_matrices(out,gold) ? "Failed": "Success");
 	
 //	printf("input matrix:\n"); print_matrix(in);
