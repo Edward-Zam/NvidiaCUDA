@@ -51,6 +51,17 @@ void getHist(unsigned int* const d_inputVals, unsigned int* d_histo)
 	// The input value will be pre-shifted so we will always check lsb
 	int myBin = myItem & 1;
 	atomicAdd(&(d_histo[myBin],1);
+}
+
+__global__
+void hillisSteeleScan(const unsigned int* const d_in, unsigned int* const d_out, const size_t numBins)
+{ // Hillis/Steele Scan algorithm is used to perform the exclusive prefix
+  // sum scan. The input is the histogram output. 
+  
+  // Copy bins to local memory
+  extern __shared__ unsigned int l_mod[];
+  
+  int id = blockId
 	
 }
 
@@ -76,7 +87,11 @@ void your_sort(unsigned int* const d_inputVals,
 	int threads = 1024;
 	int blocks  = numElems / threads;
 		
+	// The histogram kernel uses global memory, a simple kernel<<<grid, blocksize>>
+	// call is used. 
+	getHist<<<blocks,threads>>>(d_inputVals, d_histo);
 	
+
 
 	// **************** End Step 1 ***************** //
  
