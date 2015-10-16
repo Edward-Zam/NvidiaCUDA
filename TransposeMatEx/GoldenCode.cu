@@ -37,6 +37,29 @@ transpose_parallel_per_element(float in[], float out[])
 	out[j + i*N] = in[i + j*N];
 }
 
+// to be launched with one thread per element, in (tilesize)x(tilesize) threadblocks
+// thread blocks read & write tiles, in coalesced fashion
+// adjacent threads read adjacent input elements, write adjacent output elmts
+__global__ void 
+transpose_parallel_per_element_tiled(float in[], float out[])
+{	
+	// corner in and corner out are transposed
+	int corner_i_in		= blockIdx.x * K, corner_j_in  = blockIdx.y * K;
+	int corner_i_out	= blockIdx.y * K, corner_j_out = blockIdx.x * K;
+	
+	int x = threadIdx.x, y = threadIdx.y;
+	
+	extern __shared__ float tile[K][K];
+	
+	// coalesced read from global memory, transposed write to shared mem
+	tile[y][x] = in[(corner_i_in + x)+ (corner_j_in + y) * N];
+	__syncthreads();
+	
+	// read from shared memory, coalesced write
+	out[(corner_i_out + x) + (cornder_j_out + y) * N] = tile[x][y];
+	
+}
+
 int main(int argc, char **argv)
 {
 	int numbytes = N*N*sizeof(float);
@@ -83,6 +106,14 @@ int main(int argc, char **argv)
 	printf("transpose_parallel_per_element: %g ms. \nVerifying tranpose...%s\n,",
 		timer.Elapsed(),
 		compare_matrices(out,gold) ? "Failed": "Success");
+		
+	timer.Start();
+	transpose_parallel_per_element_tiled<<<blocks,threads>>>(d_in,d_out);
+	timer.Stop();
+	cudaMemcpy(out, d_out, numbytes, cudaMemcpyDeviceToHost);
+	printf("transpose_parallel_per_element_tiled: %g ms. \nVerifying transpose...%s\n,", 
+	timer.Elapsed(),
+	compare_matrices(out,gold)?"Failed":"Success");
 	
 //	printf("input matrix:\n"); print_matrix(in);
 //	printf("reference or 'gold' transposed matrix:\n"); print_matrix(gold);
