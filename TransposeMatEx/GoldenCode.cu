@@ -2,7 +2,51 @@
 #include "gputimer.h"
 
 const int N = 1024;	// matrix is N*N
-const int K = 32;	// each block will be 32 * 32 blocks
+const int K = 16;	// each block will be 32 * 32 blocks
+
+// Utility functions: compare, print, and fill matrices
+#define checkCudaErrors(val) check( (val), #val, __FILE__, __LINE__)
+
+template<typename T>
+void check(T err, const char* const func, const char* const file, const int line)
+{
+  if (err != cudaSuccess) {
+    fprintf(stderr, "CUDA error at: %s : %d\n", file,line);
+    fprintf(stderr, "%s %s\n", cudaGetErrorString(err), func);;
+    exit(1);
+  }
+}
+
+int compare_matrices(float *gpu, float *ref)
+{
+	int result = 0;
+
+	for(int j=0; j < N; j++)
+    	for(int i=0; i < N; i++)
+    		if (ref[i + j*N] != gpu[i + j*N])
+    		{
+    			// printf("reference(%d,%d) = %f but test(%d,%d) = %f\n",
+    			// i,j,ref[i+j*N],i,j,test[i+j*N]);
+    			result = 1;
+    		}
+    return result;
+}
+
+void print_matrix(float *mat)
+{
+	for(int j=0; j < N; j++) 
+	{
+		for(int i=0; i < N; i++) { printf("%4.4g ", mat[i + j*N]); }
+		printf("\n");
+	}	
+}
+
+// fill a matrix with sequential numbers in the range 0..N-1
+void fill_matrix(float *mat)
+{
+	for(int j=0; j < N * N; j++)
+		mat[j] = (float) j;
+}
 
 void transpose_CPU(float in [], float out[])
 {

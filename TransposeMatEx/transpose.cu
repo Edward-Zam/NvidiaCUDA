@@ -200,13 +200,13 @@ int main(int argc, char **argv)
  * But this makes for messy code and our goal is teaching, not detailed benchmarking.
  */
 
-/*	timer.Start();
+	timer.Start();
 	transpose_serial<<<1,1>>>(d_in, d_out);
 	timer.Stop();
 	cudaMemcpy(out, d_out, numbytes, cudaMemcpyDeviceToHost);
 	printf("transpose_serial: %g ms.\nVerifying transpose...%s\n", 
 	       timer.Elapsed(), compare_matrices(out, gold) ? "Failed" : "Success");
-*/
+
 
 	timer.Start();
 	transpose_parallel_per_row<<<1,N>>>(d_in, d_out);
