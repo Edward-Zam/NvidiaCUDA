@@ -68,6 +68,79 @@
 #include <thrust/host_vector.h>
 #include "reference_calc.cpp"
 
+const int threads = 1024;	// number of threads in block
+const int twidth = 32;		// tile size is twdith X twidth
+
+__global__
+void createMask( const uchar4* const d_sourceImg, unsigned char* const mask,
+				const size_t numRowsSource, const size_t numColsSource)
+{
+	// Find global ID from an K*K block
+	//id = blockIdx.x * blockIdx.y + threadIdx.x;
+	const int2 thread_2D_pos = make_int2(blockIdx.x * blockDim.x + threadId.x,
+	blockIdx.y * blockDim.y + threadIdx.y);
+	
+	const int gid = thread_2D_pos.y * numColsSource + thread_2D_pos.x;
+	
+	int tid = blockDim.x * threadIdx.y + threadId.x;
+	
+	if( thread_2D_pos.x >= numColsSource || thread_2D_pos.y >= numRowsSource)
+	{
+		return; // return if trying to access memory outside of GPU memory.
+	}
+	
+	mask[tid] = (d_sourceImg[gid].x + d_sourceImg[gid].y + d_sourceImg[gid].z < 3*255) ? 1:0;
+}
+
+__global__
+void sortPixels()
+{
+	// Find global ID from an K*K block
+	//id = blockIdx.x * blockIdx.y + threadIdx.x;
+	const int2 thread_2D_pos = make_int2(blockIdx.x * blockDim.x + threadId.x,
+	blockIdx.y * blockDim.y + threadIdx.y);
+	
+	const int gid = thread_2D_pos.y * numColsSource + thread_2D_pos.x;
+	
+	int tid = blockDim.x * threadIdx.y + threadId.x;
+	
+	if( thread_2D_pos.x >= numColsSource || thread_2D_pos.y >= numRowsSource)
+	{
+		return; // return if trying to access memory outside of GPU memory.
+	}
+	
+	// grab neighboring pixels from mask
+	char right	= mask[gid + 1];
+	char left	= mask[gid - 1];
+	char top	= mask[gid -numRowsSource];
+	char bottom = mask[gid + numRowSource];
+	
+	// check each pixel and its neighbors. 
+	// Don't check borders
+	if( (thread_2D_pos.y != 0) && (thread_2D_pos.y != numRowsSource -1) &&
+		(thread_2D_pos.x != 0) && (thread_2D_pos.x != numColsSource -1))
+	{
+		if (mask[gid])
+		{
+			if(mask(right) && mask(left) && mask(top) && mask(bottom)
+			{
+				interiorPixels[tid]	= 1;
+				borderPixels[tid]	= 0;
+			}
+			else
+			{
+				interiorPixels[tid]	= 0;
+				borderPixels[tid]	= 1;
+			}
+		}
+		else
+		{
+			interiorPixels[tid] = 0;
+			borderPixels[tid]	= 0;
+		}
+	}
+}
+
 void your_blend(const uchar4* const h_sourceImg,  //IN
                 const size_t numRowsSource, const size_t numColsSource,
                 const uchar4* const h_destImg, //IN
@@ -79,24 +152,57 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
      1) Compute a mask of the pixels from the source image to be copied
         The pixels that shouldn't be copied are completely white, they
         have R=255, G=255, B=255.  Any other pixels SHOULD be copied.
-
+	*/
+	const size_t srcSize = numRowsSource * numColsSource;
+	unsigned char* d_mask;
+	unsigned char* d_borderPixels;
+	unsigned char* d_interiorPixels;
+	
+	// Initialize threads to max allowed per block for this GPU.
+	dim3 threads(twidth, twidth);
+	// Calculate number of blocks
+	dim3 blocks(numColsSource/twidth +1, numRowsSource/twidth +1);
+	
+	// Allocate device memory
+	checkCudaErrors(cudaMalloc(&d_sourceImg, sizeof(char4) * srcSize));
+	checkCudaErrors(cudaMalloc(&d_mask, sizeof(uchar) * srcSize));
+	checkCudaErrors(cudaMalloc(&d_borderPixels, sizeof(uchar) * srcSize));
+	checkCudaErrors(cudaMalloc(&d_interiorPixels, sizeof(uchar) * srcSize));
+	
+	
+	// Copy h_source to d_source
+	checkCudaErrors(cudaMemppy(d_sourceImg, h_sourceImg, sizeof(char4) * srcSize, cudaMemcpyHostToDevice));
+	
+	// Launch kernel to create mask
+	createMask<<<blocks,threads>>>(d_sourceImg, mask);
+	
+	/*
      2) Compute the interior and border regions of the mask.  An interior
         pixel has all 4 neighbors also inside the mask.  A border pixel is
         in the mask itself, but has at least one neighbor that isn't.
-
+	*/
+	// Launch kernel to computer interior and border pixels.
+	// threads and blocks remain the same since we are still working with srcSize
+	
+	/*
      3) Separate out the incoming image into three separate channels
-
+     */
+	/*
      4) Create two float(!) buffers for each color channel that will
         act as our guesses.  Initialize them to the respective color
         channel of the source image since that will act as our intial guess.
-
+	*/
+	/* 
      5) For each color channel perform the Jacobi iteration described 
         above 800 times.
-
+	*/
+	/*
      6) Create the output image by replacing all the interior pixels
         in the destination image with the result of the Jacobi iterations.
         Just cast the floating point values to unsigned chars since we have
         already made sure to clamp them to the correct range.
+        */
+     /*
 
       Since this is final assignment we provide little boilerplate code to
       help you.  Notice that all the input/output pointers are HOST pointers.
@@ -110,7 +216,9 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
       cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
       to catch any errors that happened while executing the kernel.
-  */
+      */
+      
+  
 
 
 
