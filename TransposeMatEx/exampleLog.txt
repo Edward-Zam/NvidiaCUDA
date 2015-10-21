@@ -1,0 +1,9 @@
+transpose_serial: 499.031 ms. 
+Verifying transpose...Success
+,transpose_parallel_per_row: 12.0317 ms. 
+Verifying transpose...Failed
+,transpose_parallel_per_element: 1.406 ms. 
+Verifying tranpose...Success
+,transpose_parallel_per_element_tiled: 1.19542 ms. 
+Verifying transpose...Success
+,

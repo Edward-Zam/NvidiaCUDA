@@ -1,0 +1,12 @@
+transpose_serial: 612.693 ms.
+Verifying transpose...Success
+transpose_parallel_per_row: 12.0074 ms.
+Verifying transpose...Success
+transpose_parallel_per_element: 2.116 ms.
+Verifying transpose...Success
+transpose_parallel_per_element_tiled 32x32: 1.86375 ms.
+Verifying ...Success
+transpose_parallel_per_element_tiled 16x16: 1.4955 ms.
+Verifying ...Success
+transpose_parallel_per_element_tiled_padded 16x16: 1.46392 ms.
+Verifying...Success

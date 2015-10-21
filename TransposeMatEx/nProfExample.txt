@@ -1,0 +1,28 @@
+==27713== NVPROF is profiling process 27713, command: ./transposeMyExample
+==27713== Profiling application: ./transposeMyExample
+==27713== Profiling result:
+Time(%)      Time     Calls       Avg       Min       Max  Name
+ 94.58%  496.50ms         1  496.50ms  496.50ms  496.50ms  transpose_serial(float*, float*)
+  2.27%  11.927ms         1  11.927ms  11.927ms  11.927ms  transpose_parallel_per_row(float*, float*)
+  1.91%  10.045ms         4  2.5111ms  1.7993ms  4.0341ms  [CUDA memcpy DtoH]
+  0.79%  4.1523ms         1  4.1523ms  4.1523ms  4.1523ms  [CUDA memcpy HtoD]
+  0.24%  1.2666ms         1  1.2666ms  1.2666ms  1.2666ms  transpose_parallel_per_element(float*, float*)
+  0.20%  1.0613ms         1  1.0613ms  1.0613ms  1.0613ms  transpose_parallel_per_element_tiled(float*, float*)
+
+==27713== API calls:
+Time(%)      Time     Calls       Avg       Min       Max  Name
+ 73.29%  532.17ms         5  106.43ms  3.5983ms  506.06ms  cudaMemcpy
+ 26.53%  192.62ms         2  96.310ms  567.67us  192.05ms  cudaMalloc
+  0.07%  524.92us         8  65.614us  33.750us  120.25us  cudaEventRecord
+  0.06%  400.00us         4  100.00us  80.917us  131.42us  cudaLaunch
+  0.03%  199.75us        83  2.4060us     583ns  75.250us  cuDeviceGetAttribute
+  0.01%  78.251us         4  19.562us  18.417us  21.250us  cudaEventSynchronize
+  0.01%  47.001us         4  11.750us  11.584us  11.917us  cudaEventElapsedTime
+  0.00%  34.499us         2  17.249us  3.8340us  30.665us  cudaEventDestroy
+  0.00%  28.833us         2  14.416us  4.2500us  24.583us  cudaEventCreate
+  0.00%  14.834us         8  1.8540us     750ns  9.0000us  cudaSetupArgument
+  0.00%  13.166us         4  3.2910us  1.5840us  7.6660us  cudaConfigureCall
+  0.00%  3.2500us         2  1.6250us  1.0000us  2.2500us  cuDeviceGetCount
+  0.00%  2.6670us         1  2.6670us  2.6670us  2.6670us  cuDeviceTotalMem
+  0.00%  1.7510us         2     875ns     834ns     917ns  cuDeviceGet
+  0.00%  1.3330us         1  1.3330us  1.3330us  1.3330us  cuDeviceGetName

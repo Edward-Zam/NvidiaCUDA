@@ -1,0 +1,31 @@
+==27478== NVPROF is profiling process 27478, command: ./transposeSerial
+==27478== Profiling application: ./transposeSerial
+==27478== Profiling result:
+Time(%)      Time     Calls       Avg       Min       Max  Name
+ 94.42%  610.17ms         1  610.17ms  610.17ms  610.17ms  transpose_serial(float*, float*)
+  2.11%  13.650ms         6  2.2749ms  1.7943ms  3.8943ms  [CUDA memcpy DtoH]
+  1.84%  11.907ms         1  11.907ms  11.907ms  11.907ms  transpose_parallel_per_row(float*, float*)
+  0.64%  4.1520ms         1  4.1520ms  4.1520ms  4.1520ms  [CUDA memcpy HtoD]
+  0.31%  1.9746ms         1  1.9746ms  1.9746ms  1.9746ms  transpose_parallel_per_element(float*, float*)
+  0.27%  1.7224ms         1  1.7224ms  1.7224ms  1.7224ms  transpose_parallel_per_element_tiled(float*, float*)
+  0.21%  1.3540ms         1  1.3540ms  1.3540ms  1.3540ms  transpose_parallel_per_element_tiled16(float*, float*)
+  0.21%  1.3302ms         1  1.3302ms  1.3302ms  1.3302ms  transpose_parallel_per_element_tiled_padded16(float*, float*)
+
+==27478== API calls:
+Time(%)      Time     Calls       Avg       Min       Max  Name
+ 82.73%  655.41ms         7  93.630ms  3.4752ms  619.81ms  cudaMemcpy
+ 16.94%  134.17ms         2  67.085ms  346.25us  133.82ms  cudaMalloc
+  0.10%  801.50us        12  66.791us  31.667us  123.00us  cudaEventRecord
+  0.10%  787.17us         2  393.58us  363.17us  424.00us  cudaFree
+  0.07%  570.00us         6  94.999us  81.833us  126.67us  cudaLaunch
+  0.03%  212.58us        83  2.5610us     666ns  77.665us  cuDeviceGetAttribute
+  0.01%  117.83us         6  19.638us  18.583us  20.500us  cudaEventSynchronize
+  0.01%  68.334us         6  11.389us  11.000us  11.750us  cudaEventElapsedTime
+  0.00%  27.750us         2  13.875us  3.3340us  24.416us  cudaEventCreate
+  0.00%  20.249us        12  1.6870us     750ns  9.6670us  cudaSetupArgument
+  0.00%  19.501us         6  3.2500us  1.5830us  10.417us  cudaConfigureCall
+  0.00%  10.251us         2  5.1250us  3.3340us  6.9170us  cudaEventDestroy
+  0.00%  3.5000us         2  1.7500us  1.0000us  2.5000us  cuDeviceGetCount
+  0.00%  2.7500us         1  2.7500us  2.7500us  2.7500us  cuDeviceTotalMem
+  0.00%  1.7490us         2     874ns     833ns     916ns  cuDeviceGet
+  0.00%  1.2500us         1  1.2500us  1.2500us  1.2500us  cuDeviceGetName
