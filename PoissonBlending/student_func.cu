@@ -72,8 +72,8 @@ const int threads = 1024;	// number of threads in block
 const int twidth = 32;		// tile size is twdith X twidth
 
 __global__
-void createMask( const uchar4* const d_sourceImg, unsigned char* const mask,
-				const size_t numRowsSource, const size_t numColsSource)
+void createMask(const size_t numRowsSource, const size_t numColsSource
+				const uchar4* const d_sourceImg, unsigned char* const mask)
 {
 	// Find global ID from an K*K block
 	//id = blockIdx.x * blockIdx.y + threadIdx.x;
@@ -93,7 +93,9 @@ void createMask( const uchar4* const d_sourceImg, unsigned char* const mask,
 }
 
 __global__
-void sortPixels()
+void sortPixels(const size_t numRowsSource , const size_t , numColsSource
+				const unsigned char* const mask, unsigned char* const interiorPixels, 
+				unsigned char* const borderPixels,)
 {
 	// Find global ID from an K*K block
 	//id = blockIdx.x * blockIdx.y + threadIdx.x;
@@ -141,6 +143,66 @@ void sortPixels()
 	}
 }
 
+__global__
+void seperateChannels(const size_t numRowsSource, const size_t numColsSource ,
+					  const uchar4* const d_sourceImg, unsigned char* const redChannel,
+					  unsigned char* const greenChannel, unsigned char* const blueChannel)
+{
+	const int2 thread_2D_pos = make_int2(blockIdx.x * blockDim.x + threadId.x,
+	blockIdx.y * blockDim.y + threadIdx.y);
+	
+	const int gid = thread_2D_pos.y * numColsSource + thread_2D_pos.x;
+	
+	int tid = blockDim.x * threadIdx.y + threadId.x;
+	
+	if( thread_2D_pos.x >= numColsSource || thread_2D_pos.y >= numRowsSource)
+	{
+		return; // return if trying to access memory outside of GPU memory.
+	}
+	
+	uchar4 inputPixel = inputImageRGBA[thread_1D_pos];
+	redChannel[thread_1D_pos]	= inputPixel.x;
+	greenChannel[thread_1D_pos]	= inputPixel.y;
+	blueChannel[thread_1D_pos]	= inputPixel.z;
+	// Ignore alpha channel;
+	
+}
+
+__global__
+void initChannels(const size_t numRowsSource, const size_t numColsSource,
+				  const unsigned char* const srcColorChannel,
+				  float* const blendedVal_1, float* const blendedVal_2)
+{
+	const int2 thread_2D_pos = make_int2(blockIdx.x * blockDim.x + threadId.x,
+	blockIdx.y * blockDim.y + threadIdx.y);
+	
+	const int gid = thread_2D_pos.y * numColsSource + thread_2D_pos.x;
+	
+	int tid = blockDim.x * threadIdx.y + threadId.x;
+	
+	if( thread_2D_pos.x >= numColsSource || thread_2D_pos.y >= numRowsSource)
+	{
+		return; // return if trying to access memory outside of GPU memory.
+	}
+	
+	blendedVal_1[tid] = srcColorChannel[tid];
+	blendedVal_2[tid] = srcColorChannel[tid];
+}
+
+__global__
+jacobiIteration(float* const imageGuess_next, float* const imageGuess_prev,
+				const uchar4* const destImg, const uchar4* const sourceImg,
+				somenewVal, const int numIterations )
+{
+	float sum1 = 0.f;
+	float sum2 = 0.f;
+	
+	for (int i = 0; i < numIterations; i++)
+	{
+		sum1 += sourceImg[tid] - sourceImg[
+	}
+}
+
 void your_blend(const uchar4* const h_sourceImg,  //IN
                 const size_t numRowsSource, const size_t numColsSource,
                 const uchar4* const h_destImg, //IN
@@ -153,10 +215,23 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
         The pixels that shouldn't be copied are completely white, they
         have R=255, G=255, B=255.  Any other pixels SHOULD be copied.
 	*/
-	const size_t srcSize = numRowsSource * numColsSource;
-	unsigned char* d_mask;
-	unsigned char* d_borderPixels;
-	unsigned char* d_interiorPixels;
+	const size_t 	srcSize = numRowsSource * numColsSource;
+	unsigned char* 	d_mask;
+	
+	unsigned char* 	d_borderPixels;
+	unsigned char* 	d_interiorPixels;
+	
+	unsigned char* 	d_redSrc;
+	unsigned char* 	d_greenSrc;
+	unsigned char* 	d_blueSrc;
+	
+	float* 			d_blendedRed_1;
+	float* 			d_blendedRed_2;
+	float*			d_blendedGreen_1;
+	float*			d_blendedGreen_2;
+	float*			d_blendedBlue_1;
+	float*			d_blendedBlue_2;
+	
 	
 	// Initialize threads to max allowed per block for this GPU.
 	dim3 threads(twidth, twidth);
@@ -166,15 +241,27 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
 	// Allocate device memory
 	checkCudaErrors(cudaMalloc(&d_sourceImg, sizeof(char4) * srcSize));
 	checkCudaErrors(cudaMalloc(&d_mask, sizeof(uchar) * srcSize));
+	
 	checkCudaErrors(cudaMalloc(&d_borderPixels, sizeof(uchar) * srcSize));
 	checkCudaErrors(cudaMalloc(&d_interiorPixels, sizeof(uchar) * srcSize));
+	
+	checkCudaErrors(cudaMalloc(&d_redSrc, sizeof(uchar) * srcSize));
+	checkCudaErrors(cudaMalloc(&d_greenSrc, sizeof(uchar) * srcSize));
+	checkCudaErrors(cudaMalloc(&d_blueSrc, sizeof(uchar) * srcSize));
+	
+	checkCudaErrors(cudaMalloc(&d_blendedred_1 ,sizeof(float) * srcSize));
+	checkCudaErrors(cudaMalloc(&d_blendedred_2 ,sizeof(float) * srcSize));
+	checkCudaErrors(cudaMalloc(&d_blendedgreen_1 ,sizeof(float) * srcSize));
+	checkCudaErrors(cudaMalloc(&d_blendedgreen_2 ,sizeof(float) * srcSize));
+	checkCudaErrors(cudaMalloc(&d_blendedblue_1 ,sizeof(float) * srcSize));
+	checkCudaErrors(cudaMalloc(&d_blendedblue_2 ,sizeof(float) * srcSize));
 	
 	
 	// Copy h_source to d_source
 	checkCudaErrors(cudaMemppy(d_sourceImg, h_sourceImg, sizeof(char4) * srcSize, cudaMemcpyHostToDevice));
 	
 	// Launch kernel to create mask
-	createMask<<<blocks,threads>>>(d_sourceImg, mask);
+	createMask<<<blocks,threads>>>(numRowsSource, numColsSource, d_sourceImg, d_mask);
 	
 	/*
      2) Compute the interior and border regions of the mask.  An interior
@@ -183,15 +270,27 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
 	*/
 	// Launch kernel to computer interior and border pixels.
 	// threads and blocks remain the same since we are still working with srcSize
+	sortPixels<<<blocks, threads>>>(numRowsSource, numColsSource, d_mask, 
+									d_interiorPixels, d_borderPixels);
 	
 	/*
      3) Separate out the incoming image into three separate channels
      */
+     seperateChannels<<blocks, threads>>>(numRowsSource, numColsSource, d_sourceImg,
+										  d_redSrc, d_greenSrc, d_blueSrc);
+     
 	/*
      4) Create two float(!) buffers for each color channel that will
         act as our guesses.  Initialize them to the respective color
         channel of the source image since that will act as our intial guess.
 	*/
+	initChannels<<<blocks, threads>>>(numRowsSource, numColsSource, d_redSrc,
+									  d_blendedred_1, d_blendedred_2);
+	initChannels<<<blocks, threads>>>(numRowsSource, numColsSource, d_greenSrc,
+									  d_blendedgreen_1, d_blendedgreen_2);
+	initChannels<<<blocks, threads>>>(numRowsSource, numColsSource, d_blueSrc, 
+									  d_blendedblue_1, d_blendedblue_2);
+	
 	/* 
      5) For each color channel perform the Jacobi iteration described 
         above 800 times.
